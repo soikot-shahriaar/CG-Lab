@@ -1,8 +1,7 @@
 #include <GL/glut.h>
 #include <math.h>
 
-void draw()
-{
+void draw() {
     glClear(GL_COLOR_BUFFER_BIT);
     float i, x, y, theta;
     glColor3f(1, 0, 0);
