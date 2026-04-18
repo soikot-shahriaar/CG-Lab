@@ -1,3 +1,5 @@
+// 5. Wooden Fence Posts
+
 #include <windows.h>
 #include <GL\glut.h>
 #include <GL/glu.h>
@@ -5,259 +7,170 @@
 #include <stdlib.h>
 #include <stdio.h>
 
-#define PI 3.1416
-
 // --- GLOBAL VARIABLES ---
 
 GLint i;
 
 // State Variables
-GLfloat day_angle = PI / 2.0f; // Starts at PI/2 (Daytime)
-bool isDay = true;             // Day/Night toggle state
-bool isPlaying = false;        // Play/Pause animation state
-GLfloat anim_speed = 1.0f;     // Speed multiplier for all animations
+bool isPlaying = false;
 
 // Animation Offsets
-GLfloat ax = 0, bx = 0, cx = 0, dx = 0; // Cloud X-axis positions
-GLfloat spin = 0.0;                     // Windmill blade rotation angle
-GLfloat position6 = 100.0f;             // Airplane X-axis position
-GLfloat motorboat_x = 1000.0f;          // Motorboat X-axis position
-GLfloat sailboat_x = 650.0f;            // Sailboat X-axis position
-GLfloat wave_offset = 0.0f;             // River wave scrolling offset
+GLfloat ax = 0, bx = 0;      // Clouds X-axis Movement
+GLfloat spin = 0.0;          // Windmill Blades Rotation Angle
+GLfloat plane_x = 850.0f;    // Airplane X-axis position
+GLfloat sailboat_x = 250.0f; // Sailboat X-axis position
 
 // --- INITIALIZATION ---
 
-void init(void)
-{
+void init(void) {
     glMatrixMode(GL_PROJECTION);
-    // Sets the 2D viewing area: X from 0 to 1000, Y from -280 to 500
-    gluOrtho2D(0.0, 1000.0, -280.0, 500.0);
+    gluOrtho2D(0.0, 1000.0, -280.0, 500.0); // X from 0 to 1000, Y from -280 to 500
 }
 
 // --- UTILITY DRAWING FUNCTIONS ---
 
-// Standard circle drawing using trigonometric functions
+// Midpoint Circle Algorithm (Filled using GL_QUADS)
 void circle(GLdouble rad) {
-    GLint points = 50;
-    GLdouble delTheta = (2.0 * PI) / (GLdouble)points;
-    GLdouble theta = 0.0;
-
-    glBegin(GL_POLYGON);
-    for (i = 0; i <= points; i++, theta += delTheta) {
-        glVertex2f(rad * cos(theta), rad * sin(theta));
-    }
-    glEnd();
-}
-
-// Midpoint Circle Algorithm using GL_QUADS
-void midpoint_circle(int r) {
+    int r = (int)rad;
     int x = 0;
     int y = r;
     int p = 1 - r;
 
     glBegin(GL_QUADS);
-    while (x <= y) {
-        // Draw 1-unit thick rectangles connecting symmetric points
-        glVertex2i(-x, y); // Top
-        glVertex2i(x, y);
-        glVertex2i(x, y - 1);
-        glVertex2i(-x, y - 1); 
-        glVertex2i(-x, -y); // Bottom
-        glVertex2i(x, -y);
-        glVertex2i(x, -y + 1);
-        glVertex2i(-x, -y + 1); 
-        glVertex2i(-y, x); // Upper Mid
-        glVertex2i(y, x);
-        glVertex2i(y, x - 1);
-        glVertex2i(-y, x - 1); 
-        glVertex2i(-y, -x); // Lower Mid
-        glVertex2i(y, -x);
-        glVertex2i(y, -x + 1);
-        glVertex2i(-y, -x + 1); 
+    while (x <= y) { // Loops until X and Y cross (calculates 1/8th of the circle)
+        // Draws a horizontal strip across the TOP of the circle
+        glVertex2i(-x, y);      // Top strip - Left outer point
+        glVertex2i(x, y);       // Top strip - Right outer point
+        glVertex2i(x, y - 1);   // Top strip - Right inner point (1 pixel thick)
+        glVertex2i(-x, y - 1);  // Top strip - Left inner point (1 pixel thick)
+        // Draws a horizontal strip across the BOTTOM of the circle
+        glVertex2i(-x, -y);     // Bottom strip - Left outer point
+        glVertex2i(x, -y);      // Bottom strip - Right outer point
+        glVertex2i(x, -y + 1);  // Bottom strip - Right inner point
+        glVertex2i(-x, -y + 1); // Bottom strip - Left inner point
+        // Draws a vertical strip across the UPPER SIDES of the circle
+        glVertex2i(-y, x);      // Upper sides - Left outer point
+        glVertex2i(y, x);       // Upper sides - Right outer point
+        glVertex2i(y, x - 1);   // Upper sides - Right inner point
+        glVertex2i(-y, x - 1);  // Upper sides - Left inner point
+        // Draws a vertical strip across the LOWER SIDES of the circle
+        glVertex2i(-y, -x);     // Lower sides - Left outer point
+        glVertex2i(y, -x);      // Lower sides - Right outer point
+        glVertex2i(y, -x + 1);  // Lower sides - Right inner point
+        glVertex2i(-y, -x + 1); // Lower sides - Left inner point
 
-        x++;
-        if (p < 0) {
-            p = p + 2 * x + 1;
+        x++;                   // Always steps right in the X axis
+        if (p < 0) {           // If the midpoint is INSIDE the circle border
+            p = p + 2 * x + 1; // Update parameter (Y stays the same, move purely right)
         }
-        else {
-            y--;
-            p = p + 2 * x - 2 * y + 1;
+        else {                         // If the midpoint is OUTSIDE the circle border
+            y--;                       // Step down in the Y axis (curve downwards)
+            p = p + 2 * x - 2 * y + 1; // Update parameter for diagonal move
         }
     }
     glEnd();
 }
 
-// --- BASE MODELS (SHAPES & COLORS) ---
+// --- ENVIRONMENT MODELS ---
 
-// Environment
-void draw_sky_gradient() {
-    // Calculates a value 't' between 0.0 (Night) and 1.0 (Day) based on angle
-    float t = (sin(day_angle) + 1.0f) / 2.0f;
-
-    // Interpolate colors based on 't'
-    float tr = 0.05f + t * (0.15f - 0.05f), tg = 0.05f + t * (0.45f - 0.05f), tb = 0.20f + t * (0.90f - 0.20f); // Top Sky
-    float br = 0.05f + t * (0.55f - 0.05f), bg = 0.05f + t * (0.85f - 0.05f), bb = 0.15f + t * (1.00f - 0.15f); // Bottom Sky
-
-    glShadeModel(GL_SMOOTH); // Enables smooth blending
+void draw_sky() {
     glBegin(GL_QUADS);
-    glColor3f(tr, tg, tb);
-    glVertex2f(0.0f, 500.0f);
-    glVertex2f(1000.0f, 500.0f);
-    glColor3f(br, bg, bb);
-    glVertex2f(1000.0f, -280.0f);
-    glVertex2f(0.0f, -280.0f);
+    glColor3f(0.55f, 0.85f, 1.00f); // light-blue
+    glVertex2i(0, 500);             // Top-left
+    glVertex2i(1000, 500);          // Top-right
+    glVertex2i(1000, -280);         // Bottom-right
+    glVertex2i(0, -280);            // Bottom-left
     glEnd();
-    glShadeModel(GL_FLAT);
-}
-
-void Sun_Model() {
-    glPushMatrix();
-    glTranslatef(850, 420, 0);
-    midpoint_circle(35); // Uses Midpoint Circle Algorithm
-    glPopMatrix();
 }
 
 void Sun() {
-    // Calculates Sun/Moon color (Yellow/White) based on Day/Night angle
-    float t = (sin(day_angle) + 1.0f) / 2.0f;
-    float sr = 0.8f + t * (1.0f - 0.8f);
-    float sg = 0.8f + t * (0.95f - 0.8f);
-    float sb = 0.9f + t * (0.0f - 0.9f);
-    
-    glColor3f(sr, sg, sb);
-    Sun_Model();
+    glColor3f(1.0f, 0.95f, 0.0f); // bright-yellow
+    glPushMatrix();               // Saves the current coordinate system
+    glTranslatef(500, 425, 0);    // Moves origin to X=500, Y=420 (Center top)
+    circle(37);                   // Draws a circle with radius 37
+    glPopMatrix();                // Restores the original coordinate system
 }
 
-// Clouds
-void cloud_model_one() {
-    glColor3f(1.25f, 0.924f, 0.930f);
+void cloud_model() {
+    glColor3f(1.25f, 0.924f, 0.930f); // off-white
     glPushMatrix();
-    glTranslatef(320, 210, 0);
+    glTranslatef(300, 200, 0); // Bottom-left
     circle(15);
     glPopMatrix();
     glPushMatrix();
-    glTranslatef(340, 225, 0);
+    glTranslatef(320, 210, 0); // Mid-left
+    circle(15);
+    glPopMatrix();
+    glPushMatrix();
+    glTranslatef(340, 220, 0); // Top-center
     circle(16);
     glPopMatrix();
     glPushMatrix();
-    glTranslatef(360, 210, 0);
-    circle(16);
-    glPopMatrix();
-    glPushMatrix();
-    glTranslatef(355, 210, 0);
-    circle(16);
-    glPopMatrix();
-    glPushMatrix();
-    glTranslatef(350, 210, 0);
-    circle(16);
-    glPopMatrix();
-    // Cloud Base Filler
-    for (int i = 305; i <= 345; i += 5) {
-        glPushMatrix();
-        glTranslatef(i, 204, 0);
-        circle(10);
-        glPopMatrix();
-    }
-}
-
-void cloud_model_Two() {
-    glColor3f(1.25f, 0.924f, 0.930f);
-    glPushMatrix();
-    glTranslatef(305, 205, 0);
-    circle(10);
-    glPopMatrix();
-    glPushMatrix();
-    glTranslatef(320, 210, 0);
+    glTranslatef(360, 210, 0); // Mid-right
     circle(15);
     glPopMatrix();
     glPushMatrix();
-    glTranslatef(334, 207, 0);
-    circle(10);
-    glPopMatrix();
-    glPushMatrix();
-    glTranslatef(320, 207, 0);
-    circle(10);
-    glPopMatrix();
-}
-
-void cloud_model_Three() {
-    glColor3f(1.25f, 0.924f, 0.930f);
-    glPushMatrix();
-    glTranslatef(300, 200, 0);
+    glTranslatef(380, 200, 0); // Bottom-right
     circle(15);
     glPopMatrix();
     glPushMatrix();
-    glTranslatef(320, 210, 0);
-    circle(15);
-    glPopMatrix();
-    glPushMatrix();
-    glTranslatef(340, 220, 0);
-    circle(16);
-    glPopMatrix();
-    glPushMatrix();
-    glTranslatef(360, 210, 0);
-    circle(15);
-    glPopMatrix();
-    glPushMatrix();
-    glTranslatef(380, 200, 0);
-    circle(15);
-    glPopMatrix();
-    glPushMatrix();
-    glTranslatef(360, 190, 0);
+    glTranslatef(360, 190, 0); // Lower-right
     circle(20);
     glPopMatrix();
     glPushMatrix();
-    glTranslatef(320, 190, 0);
+    glTranslatef(320, 190, 0); // Lower-left
     circle(20);
     glPopMatrix();
     glPushMatrix();
-    glTranslatef(340, 190, 0);
+    glTranslatef(340, 190, 0); // Lower-center
     circle(20);
     glPopMatrix();
 }
 
-// Hills/Mountains
-void hill_big() {
+void hill_big_model() {
+    // Rocky Base
     glBegin(GL_POLYGON);
-    glColor3ub(100, 105, 95); // Rocky Base
-    glVertex2i(50, 70);
-    glVertex2i(200, 300);
-    glVertex2i(350, 70);
+    glColor3ub(100, 105, 95);  // dark-gray
+    glVertex2i(50, 70);        // Bottom-left
+    glVertex2i(200, 300);      // Top peak
+    glVertex2i(350, 70);       // Bottom-right
     glEnd();
+    // Snow Cap
     glBegin(GL_POLYGON);
-    glColor3ub(250, 250, 255); // Snow Cap
-    glVertex2i(200, 300);
-    glVertex2i(240, 238);
-    glVertex2i(225, 225);
-    glVertex2i(200, 240);
-    glVertex2i(175, 225);
-    glVertex2i(160, 238);
-    glEnd();
-}
-
-void hill_small() {
-    glBegin(GL_POLYGON);
-    glColor3ub(80, 85, 90); // Rocky Base
-    glVertex2i(200, 70);
-    glVertex2i(310, 220);
-    glVertex2i(420, 70);
-    glEnd();
-    glBegin(GL_POLYGON);
-    glColor3ub(250, 250, 255); // Snow Cap
-    glVertex2i(310, 220);
-    glVertex2i(340, 179);
-    glVertex2i(325, 165);
-    glVertex2i(310, 180);
-    glVertex2i(295, 165);
-    glVertex2i(280, 179);
+    glColor3ub(250, 250, 255); // snow-white
+    glVertex2i(200, 300);      // Top-peak
+    glVertex2i(240, 238);      // Right-edge
+    glVertex2i(225, 225);      // Right-inner-curve
+    glVertex2i(200, 240);      // Center-inner-curve
+    glVertex2i(175, 225);      // Left-inner-curve
+    glVertex2i(160, 238);      // Left-edge
     glEnd();
 }
 
-//  Landscape
+void hill_small_model() {
+    // Rocky Base
+    glBegin(GL_POLYGON);
+    glColor3ub(80, 85, 90);    // medium-gray
+    glVertex2i(200, 70);       // Bottom-left
+    glVertex2i(310, 220);      // Top-peak
+    glVertex2i(420, 70);       // Bottom-right
+    glEnd();
+    // Snow Cap
+    glBegin(GL_POLYGON);
+    glColor3ub(250, 250, 255); // snow-white
+    glVertex2i(310, 220);      // Top-peak
+    glVertex2i(340, 179);      // Right-edge
+    glVertex2i(325, 165);      // Right-inner-curve
+    glVertex2i(310, 180);      // Center-inner-curve
+    glVertex2i(295, 165);      // Left-inner-curve
+    glVertex2i(280, 179);      // Left-snow-edge
+    glEnd();
+}
+
 void Tilla_One_Model() {
     glBegin(GL_POLYGON);
-    glColor3ub(65, 175, 35);
-    glVertex2i(125, 70);
+    glColor3ub(65, 175, 35); // green
+    glVertex2i(125, 70);     // Bottom-left Start
     glVertex2i(150, 80);
     glVertex2i(160, 90);
     glVertex2i(170, 90);
@@ -265,907 +178,789 @@ void Tilla_One_Model() {
     glVertex2i(190, 105);
     glVertex2i(200, 108);
     glVertex2i(300, 110);
-    glVertex2i(300, 70);
+    glVertex2i(300, 70);     // Down to Base
     glEnd();
 }
 
 void Tilla_Two_Model() {
-    glColor3ub(65, 175, 35);
+    glBegin(GL_POLYGON);
+    glColor3ub(65, 175, 35); // green
+    glVertex2i(360, 70);     // Bottom-left Start
+    glVertex2i(380, 85);
+    glVertex2i(400, 105);
+    glVertex2i(430, 120);    // Top-peak
+    glVertex2i(455, 105);
+    glVertex2i(475, 85);
+    glVertex2i(505, 70);     // Bottom-right End
+    glEnd();
+}
+
+void field() {
+    // Top Flat Rectangle
+    glBegin(GL_POLYGON);
+    glColor3ub(65, 175, 35);   // green
+    glVertex2i(0, 50);         // Bottom-left
+    glVertex2i(0, 70);         // Top-left
+    glVertex2i(1000, 70);      // Top-right
+    glVertex2i(1000, 50);
+    glEnd();
+
+    // Wavy Riverbank
+    glBegin(GL_QUAD_STRIP);
+    glColor3ub(40, 130, 22);   // dark-Green
+    glVertex2i(0, 50);         // Far Left edge
+    glVertex2i(0, -10);
+    glVertex2i(150, 50);       // First curve up
+    glVertex2i(150, 10);
+    glVertex2i(300, 50);       // Deep curve down
+    glVertex2i(300, -15);
+    glVertex2i(500, 50);       // Middle curve up
+    glVertex2i(500, 5);
+    glVertex2i(700, 50);       // Right curve down
+    glVertex2i(700, -15);
+    glVertex2i(850, 50);       // Far right curve up
+    glVertex2i(850, 10);
+    glVertex2i(1000, 50);      // Far Right edge
+    glVertex2i(1000, -10);
+    glEnd();
+}
+
+void draw_river() {
+    glBegin(GL_QUAD_STRIP);
+    glColor3ub(15, 70, 175);    // deep-blue
+    glVertex2i(0, -10);         // Far Left edge
+    glVertex2i(0, -210);
+    glVertex2i(150, 10);        // First curve up
+    glVertex2i(150, -190);
+    glVertex2i(300, -15);       // Deep curve down
+    glVertex2i(300, -215);
+    glVertex2i(500, 5);         // Middle curve up
+    glVertex2i(500, -195);
+    glVertex2i(700, -15);       // Right curve down
+    glVertex2i(700, -215);
+    glVertex2i(850, 10);        // Far right curve up
+    glVertex2i(850, -190);
+    glVertex2i(1000, -10);      // Far Right edge
+    glVertex2i(1000, -210);
+    glEnd();
+}
+
+// --- ARCHITECTURE MODELS ---
+
+void house() {
+    // Roof
+    glBegin(GL_POLYGON);
+    glColor3ub(140, 65, 45);        // dark-brown
+    glVertex2i(285, 105);           // Bottom-left
+    glVertex2i(285, 130);           // Top-left
+    glVertex2i(380, 115);           // Top-right
+    glVertex2i(380, 105);           // Bottom-right
+    glEnd();
+    // Main Wall
+    glBegin(GL_POLYGON);
+    glColor3ub(230, 215, 185);      // beige
+    glVertex2i(290, 70);            // Bottom-left
+    glVertex2i(290, 104);           // Top-left
+    glVertex2i(375, 104);           // Top-right
+    glVertex2i(375, 70);            // Bottom-right
+    glEnd();
+    // Door
+    glBegin(GL_POLYGON);
+    glColor3ub(80, 50, 35);         // wooden
+    glVertex2i(330, 70);            // Bottom-left
+    glVertex2i(330, 100);           // Top-left
+    glVertex2i(350, 100);           // Top-right
+    glVertex2i(350, 70);            // Bottom-right
+    glEnd();
+    // Left Window
+    glBegin(GL_POLYGON);
+    glColor3ub(60, 40, 45);         // glass-color
+    glVertex2i(295, 75);            // Bottom-left
+    glVertex2i(295, 90);            // Top-left
+    glVertex2i(310, 90);            // Top-right
+    glVertex2i(310, 75);            // Bottom-right
+    glEnd();
+    // Middle Window
+    glBegin(GL_POLYGON);
+    glColor3ub(60, 40, 45);         // glass-color
+    glVertex2i(312, 75);            // Bottom-left
+    glVertex2i(312, 90);            // Top-left
+    glVertex2i(327, 90);            // Top-right
+    glVertex2i(327, 75);            // Bottom-right
+    glEnd();
+    // Right Window
+    glBegin(GL_POLYGON);
+    glColor3ub(60, 40, 45);         // glass-color
+    glVertex2i(355, 75);            // Bottom-left
+    glVertex2i(355, 90);            // Top-left
+    glVertex2i(370, 90);            // Top-right
+    glVertex2i(370, 75);            // Bottom-right
+    glEnd();
+    // Side Room Roof
+    glBegin(GL_POLYGON);
+    glColor3ub(160, 75, 50);        // brown
+    glVertex2i(250, 90);            // Bottom-left
+    glVertex2i(257, 104);           // Top-left
+    glVertex2i(290, 104);           // Top-right
+    glVertex2i(290, 90);            // Bottom-right
+    glEnd();
+    // Side Room Wall
+    glBegin(GL_POLYGON);
+    glColor3ub(210, 195, 165);      // beige
+    glVertex2i(255, 70);            // Bottom-left
+    glVertex2i(255, 90);            // Top-left
+    glVertex2i(290, 90);            // Top-right
+    glVertex2i(290, 70);            // Bottom-right
+    glEnd();
+    // Garage Door
+    glBegin(GL_POLYGON);
+    glColor3ub(70, 45, 35);         // dark-brown
+    glVertex2i(260, 70);            // Bottom-left
+    glVertex2i(260, 80);            // Top-left
+    glVertex2i(285, 80);            // Top-right
+    glVertex2i(285, 70);            // Bottom-right
+    glEnd();
+}
+
+void Windmill_Blade() {
     glPushMatrix();
-    glTranslatef(430, 90, 0);
-    circle(30);
+    // glRotatef(angle, x, y, z) --> Spins Object around Z-axis
+    glRotatef(spin, 0, 0, 90);  // Blade 1
+    glBegin(GL_POLYGON);
+    glVertex2i(-5, 0);          // Center pivot point
+    glVertex2i(-85, -36);       // Outer tip bottom
+    glVertex2i(-83, -37);       // Outer tip edge
+    glVertex2i(-3, -8);         // Inner edge
+    glEnd();
     glPopMatrix();
     glPushMatrix();
-    glTranslatef(420, 87, 0);
-    circle(30);
+    glRotatef(spin, 0, 0, 90);  // Blade 2
+    glBegin(GL_POLYGON);
+    glVertex2i(0, 5);           // Center pivot point
+    glVertex2i(45, 70);         // Outer tip right
+    glVertex2i(50, 73);         // Outer tip edge
+    glVertex2i(5, 0);           // Inner edge
+    glEnd();
     glPopMatrix();
     glPushMatrix();
-    glTranslatef(410, 80, 0);
-    circle(30);
+    glRotatef(spin, 0, 0, 90);  // Blade 3
+    glBegin(GL_POLYGON);
+    glVertex2i(68, -78);        // Outer tip right
+    glVertex2i(0, 0);           // Center pivot point
+    glVertex2i(5, 5);           // Inner edge
+    glVertex2i(70, -77);        // Outer tip edge
+    glEnd();
+    glPopMatrix();
+}
+
+void Windmill() {
+    // Windmill Stand
+    glColor3f(0.38, 0.41, 0.36); // grayish-green
+    glBegin(GL_POLYGON);
+    glVertex2i(375, 100);        // Bottom-left
+    glVertex2i(380, 240);        // Top-left
+    glVertex2i(384, 240);        // Top-right
+    glVertex2i(390, 100);        // Bottom-right
+    glEnd();
+    glColor3f(0.11, 0.23, 0.36); // dark-blue
+    // Center Circle
+    glPushMatrix();
+    glTranslatef(380, 250, 0);
+    circle(10);
+    glPopMatrix();
+    // Rotating Blades
+    glPushMatrix();
+    glTranslatef(380, 251, 0);
+    Windmill_Blade();
+    glPopMatrix();
+}
+
+// --- TREE MODELS ---
+
+// Small Round Tree
+void Tree_Model_One() {
+    // Rectangle Trunk
+    glColor3ub(85, 50, 15);  // brown
+    glBegin(GL_POLYGON);
+    glVertex2i(-2, 0);
+    glVertex2i(2, 0);
+    glVertex2i(2, 20);
+    glVertex2i(-2, 20);
+    glEnd();
+    // 2 Circles Leaf
+    glColor3ub(30, 110, 18); // green-leaf
+    glPushMatrix();
+    glTranslatef(0, 20, 0);  // Bottom leaf circle
+    circle(15);
     glPopMatrix();
     glPushMatrix();
-    glTranslatef(400, 80, 0);
-    circle(30);
+    glTranslatef(0, 30, 0);  // Top leaf circle
+    circle(15);
+    glPopMatrix();
+}
+
+// Small Fluffy Tree
+void Tree_Model_Two() {
+    // Rectangle Trunk
+    glColor3ub(85, 50, 15);  // brown
+    glBegin(GL_POLYGON);
+    glVertex2i(-2, 0);
+    glVertex2i(2, 0);
+    glVertex2i(2, 14);
+    glVertex2i(-2, 14);
+    glEnd();
+    // 4 Circles Leaf
+    glColor3ub(30, 110, 18); // green-leaf
+    glPushMatrix();
+    glTranslatef(0, 15, 0);  // Center leaf circle
+    circle(8);
     glPopMatrix();
     glPushMatrix();
-    glTranslatef(390, 70, 0);
-    circle(30);
+    glTranslatef(-6, 16, 0); // Left leaf circle
+    circle(8);
     glPopMatrix();
     glPushMatrix();
-    glTranslatef(445, 80, 0);
-    circle(30);
+    glTranslatef(6, 16, 0);  // Right leaf circle
+    circle(8);
     glPopMatrix();
     glPushMatrix();
-    glTranslatef(455, 75, 0);
-    circle(30);
+    glTranslatef(0, 23, 0);  // Top leaf circle
+    circle(8);
+    glPopMatrix();
+}
+
+// Small Pine Tree
+void Tree_Model_Three() {
+    // Rectangle Trunk
+    glColor3ub(85, 50, 15);  // brown
+    glBegin(GL_POLYGON);
+    glVertex2i(-2, 0);
+    glVertex2i(2, 0);
+    glVertex2i(2, 14);
+    glVertex2i(-2, 14);
+    glEnd();
+    // Triangle pine leaf
+    glColor3ub(30, 110, 18); // green-leaf
+    glBegin(GL_POLYGON);
+    glVertex2i(-9, 13);
+    glVertex2i(9, 13);
+    glVertex2i(0, 35);
+    glEnd();
+}
+
+// Large Broad-leaf Tree
+void Tree_Model_Four() {
+    // Shaded Rectangular Trunk
+    glColor3ub(85, 50, 15);     // brown
+    glBegin(GL_POLYGON);        // Left half
+    glVertex2i(-8, 0);
+    glVertex2i(0, 0);
+    glVertex2i(0, 50);
+    glVertex2i(-8, 50);
+    glEnd();
+    glColor3ub(60, 32, 10);     // brown-shade
+    glBegin(GL_POLYGON);        // Right half
+    glVertex2i(0, 0);
+    glVertex2i(8, 0);
+    glVertex2i(8, 50);
+    glVertex2i(0, 50);
+    glEnd();
+    // 3 Circles large Leaf
+    glColor3ub(30, 110, 18);    // green-leaf
+    glPushMatrix();
+    glTranslatef(0, 70, 0);     // Top leaf circle
+    circle(38);
     glPopMatrix();
     glPushMatrix();
-    glTranslatef(465, 70, 0);
-    circle(30);
+    glTranslatef(-25, 45, 0);   // Left leaf circle
+    circle(32);
     glPopMatrix();
     glPushMatrix();
-    glTranslatef(470, 65, 0);
-    circle(30);
+    glTranslatef(25, 45, 0);    // Right leaf circle
+    circle(32);
+    glPopMatrix();
+}
+
+// Medium Broad-leaf Tree
+void Tree_Model_Five() {
+    // Shaded Rectangular Trunk
+    glColor3ub(85, 50, 15);     // brown
+    glBegin(GL_POLYGON);        // Left half
+    glVertex2i(-5, 0);
+    glVertex2i(0, 0);
+    glVertex2i(0, 30);
+    glVertex2i(-5, 30);
+    glEnd();
+    glColor3ub(60, 32, 10);     // brown-shade
+    glBegin(GL_POLYGON);        // Right half
+    glVertex2i(0, 0);
+    glVertex2i(5, 0);
+    glVertex2i(5, 30);
+    glVertex2i(0, 30);
+    glEnd();
+    // 3 Circles medium-large Leaf
+    glColor3ub(30, 110, 18);    // green-leaf
+    glPushMatrix();
+    glTranslatef(0, 42, 0);     // Top leaf circle
+    circle(23);
     glPopMatrix();
     glPushMatrix();
-    glTranslatef(480, 60, 0);
-    circle(30);
+    glTranslatef(-15, 27, 0);   // Left leaf circle
+    circle(19);
     glPopMatrix();
     glPushMatrix();
-    glTranslatef(485, 55, 0);
-    circle(20);
+    glTranslatef(15, 27, 0);    // Right leaf circle
+    circle(19);
+    glPopMatrix();
+}
+
+// --- VEHICLES ---
+
+void draw_sailboat() {
+    float baseY = -95.0f;    // Boat's Vertical Position
+    glPushMatrix();
+    glTranslatef(sailboat_x, baseY, 0.0f);
+    glScalef(1.0f, 1.0f, 1.0f);
+
+    // Boat Hull
+    glBegin(GL_POLYGON);
+    glColor3ub(120, 72, 30); // brown
+    glVertex2i(-95, 0);      // Top-left
+    glVertex2i(-75, -35);    // Bottom-left
+    glVertex2i(75, -35);     // Bottom-right
+    glVertex2i(95, 0);       // Top-right
+    glEnd();
+    // Top Rim
+    glBegin(GL_POLYGON);
+    glColor3ub(200, 50, 50); // red
+    glVertex2i(-95, 0);      // Bottom-left
+    glVertex2i(-95, -10);    // Top-left
+    glVertex2i(95, -10);     // Top-right
+    glVertex2i(95, 0);       // Bottom-right
+    glEnd();
+    // Center Pole
+    glLineWidth(3.0f);
+    glBegin(GL_LINES);
+    glColor3ub(90, 55, 18);  // dark-brown
+    glVertex2i(5, 5);        // Bottom
+    glVertex2i(5, 145);      // Top
+    glEnd();
+    glLineWidth(1.0f);
+    // Main Sail
+    glBegin(GL_TRIANGLES);
+    glColor3ub(245, 210, 70);// yellow
+    glVertex2i(5, 8);        // Bottom-right
+    glVertex2i(5, 140);      // Top
+    glVertex2i(-75, 14);     // Far-left
+    glEnd();
+    // Front Sail
+    glBegin(GL_TRIANGLES);
+    glColor3ub(230, 130, 50);// orange
+    glVertex2i(5, 110);      // Top point
+    glVertex2i(5, 8);        // Bottom-left
+    glVertex2i(70, 18);      // Far-right
+    glEnd();
+
+    glPopMatrix();
+}
+
+void draw_plane() {
+    float baseY = 365.0f;        // Plane's Vertical Position
+    glPushMatrix();
+    glTranslatef(plane_x, baseY, 0.0f);
+    glScalef(-1.0f, 1.0f, 1.0f); // Flips the Plane Horizontally
+
+    // Tail Fin
+    glBegin(GL_POLYGON);
+    glColor3ub(220, 40, 40); // red
+    glVertex2i(-45, 15);     // Bottom-right
+    glVertex2i(-35, 35);     // Top-right
+    glVertex2i(-50, 35);     // Top-left
+    glVertex2i(-55, 15);     // Bottom-left
+    glEnd();
+    // Main Body
+    glBegin(GL_POLYGON);
+    glColor3ub(245, 245, 250); // white
+    glVertex2i(-55, -3);       // Bottom-left
+    glVertex2i(35, -3);        // Bottom-right
+    glVertex2i(55, 5);         // Aerodynamic Nose Tip
+    glVertex2i(40, 15);        // Top-right
+    glVertex2i(-50, 15);       // Top-left
+    glEnd();
+    // Cockpit Window
+    glBegin(GL_POLYGON);
+    glColor3ub(100, 200, 255); // light-blue
+    glVertex2i(25, 15);        // Bottom-left
+    glVertex2i(40, 15);        // Bottom-right
+    glVertex2i(50, 8);         // Top-right
+    glVertex2i(25, 8);         // Top-left
+    glEnd();
+    // Main Wing
+    glBegin(GL_POLYGON);
+    glColor3ub(220, 40, 40); // red
+    glVertex2i(-10, 3);      // Top-left
+    glVertex2i(25, 3);       // Top-right
+    glVertex2i(5, -25);      // Bottom-right
+    glVertex2i(-20, -25);    // Bottom-left
+    glEnd();
+
+    glPopMatrix();
+}
+
+// --- TERRAIN ---
+
+void village_road() {
+    glColor3ub(180, 135, 85); // Dirt Brown color
+    // Main Rectangle Road
+    glBegin(GL_POLYGON);
+    glVertex2i(0, 52);        // Bottom-left
+    glVertex2i(1000, 52);     // Bottom-right
+    glVertex2i(1000, 65);     // Top-right
+    glVertex2i(0, 65);        // Top-left
+    glEnd();
+    // Road to House 1
+    glBegin(GL_POLYGON);
+    glVertex2i(330, 65);
+    glVertex2i(350, 65);
+    glVertex2i(350, 70);
+    glVertex2i(330, 70);
+    glEnd();
+    // Road to House 2
+    glBegin(GL_POLYGON);
+    glVertex2i(780, 65);
+    glVertex2i(800, 65);
+    glVertex2i(800, 70);
+    glVertex2i(780, 70);
+    glEnd();
+    // Road up to Hill House
+    glBegin(GL_POLYGON);
+    glVertex2i(555, 65);
+    glVertex2i(585, 65);
+    glVertex2i(605, 107);
+    glVertex2i(580, 107);
+    glEnd();
+    // Road to House 4
+    glBegin(GL_POLYGON);
+    glVertex2i(80, 65);
+    glVertex2i(100, 65);
+    glVertex2i(100, 70);
+    glVertex2i(80, 70);
+    glEnd();
+    // Road to Right House
+    glBegin(GL_POLYGON);
+    glVertex2i(960, 65);
+    glVertex2i(980, 65);
+    glVertex2i(980, 70);
+    glVertex2i(960, 70);
+    glEnd();
+}
+
+void draw_bottom_field() {
+    // Top Wavy Part
+    glBegin(GL_POLYGON);
+    glColor3ub(65, 175, 35);    // Bright-green Color
+    glVertex2i(0, -280);        // Bottom-left
+    glVertex2i(0, -210);
+    glVertex2i(150, -190);
+    glVertex2i(300, -215);
+    glVertex2i(500, -195);
+    glVertex2i(700, -215);
+    glVertex2i(850, -190);
+    glVertex2i(1000, -210);
+    glVertex2i(1000, -280);     // Bottom-right
+    glEnd();
+
+    // Dirt Path
+    glBegin(GL_POLYGON);
+    glColor3ub(180, 135, 85);   // Dirt-brown Color
+    glVertex2i(250, -280);      // Bottom-left
+    glVertex2i(340, -280);      // Bottom-right
+    glVertex2i(310, -215);      // Top-right
+    glVertex2i(270, -210);      // Top-left
+    glEnd();
+
+    // Wooden Fence Posts(12)
+    glColor3ub(120, 70, 40);
+    glBegin(GL_QUADS);
+    for (int i = 400; i <= 950; i += 50) {
+        glVertex2i(i, -275);
+        glVertex2i(i + 8, -275);
+        glVertex2i(i + 8, -240);
+        glVertex2i(i, -240);
+    }
+    glEnd();
+    // Wooden Fence Rails(2)
+    glBegin(GL_QUADS);
+    glVertex2i(400, -250);      // Upper Rail
+    glVertex2i(950, -250);
+    glVertex2i(950, -246);
+    glVertex2i(400, -246);
+    glVertex2i(400, -265);      // Lower Rail
+    glVertex2i(950, -265);
+    glVertex2i(950, -261);
+    glVertex2i(400, -261);
+    glEnd();
+}
+
+// --- SCENE INSTANCES (POSITIONING MODELS) ---
+
+// Clouds
+void cloud_one() {   // Upper Cloud
+    glPushMatrix();
+    glTranslatef(ax + 150, 150, 0);
+    cloud_model();
+    glPopMatrix();
+}
+
+void cloud_two() {   // Lower Cloud
+    glPushMatrix();
+    glTranslatef(bx + 350, 180, 0);
+    cloud_model();
     glPopMatrix();
 }
 
 // Houses
-void house() {
-    // Roofs
-    glBegin(GL_POLYGON);
-    glColor3ub(140, 65, 45);
-    glVertex2i(285, 105);
-    glVertex2i(285, 130);
-    glVertex2i(380, 115);
-    glVertex2i(380, 105);
-    glEnd();
-    glBegin(GL_POLYGON);
-    glColor3ub(110, 45, 30);
-    glVertex2i(285, 105);
-    glVertex2i(285, 120);
-    glVertex2i(380, 105);
-    glVertex2i(380, 105);
-    glEnd(); 
-    // Main Wall
-    glBegin(GL_POLYGON);
-    glColor3ub(230, 215, 185);
-    glVertex2i(290, 70);
-    glVertex2i(290, 104);
-    glVertex2i(375, 104);
-    glVertex2i(375, 70);
-    glEnd();
-    glBegin(GL_POLYGON);
-    glColor3ub(200, 185, 155);
-    glVertex2i(310, 70);
-    glVertex2i(350, 104);
-    glVertex2i(375, 104);
-    glVertex2i(375, 70);
-    glEnd(); 
-    // Door & Windows
-    glBegin(GL_POLYGON);
-    glColor3ub(80, 50, 35);
-    glVertex2i(330, 70);
-    glVertex2i(330, 100);
-    glVertex2i(350, 100);
-    glVertex2i(350, 70);
-    glEnd();
-    glBegin(GL_POLYGON);
-    glColor3ub(60, 40, 45);
-    glVertex2i(295, 75);
-    glVertex2i(295, 90);
-    glVertex2i(310, 90);
-    glVertex2i(310, 75);
-    glEnd();
-    glBegin(GL_POLYGON);
-    glColor3ub(60, 40, 45);
-    glVertex2i(312, 75);
-    glVertex2i(312, 90);
-    glVertex2i(327, 90);
-    glVertex2i(327, 75);
-    glEnd();
-    glBegin(GL_POLYGON);
-    glColor3ub(60, 40, 45);
-    glVertex2i(355, 75);
-    glVertex2i(355, 90);
-    glVertex2i(370, 90);
-    glVertex2i(370, 75);
-    glEnd();
-    // Attached Side Room
-    glBegin(GL_POLYGON);
-    glColor3ub(160, 75, 50);
-    glVertex2i(250, 90);
-    glVertex2i(257, 104);
-    glVertex2i(290, 104);
-    glVertex2i(290, 90);
-    glEnd();
-    glBegin(GL_POLYGON);
-    glColor3ub(210, 195, 165);
-    glVertex2i(255, 70);
-    glVertex2i(255, 90);
-    glVertex2i(290, 90);
-    glVertex2i(290, 70);
-    glEnd();
-    glBegin(GL_POLYGON);
-    glColor3ub(70, 45, 35);
-    glVertex2i(260, 70);
-    glVertex2i(260, 80);
-    glVertex2i(285, 80);
-    glVertex2i(285, 70);
-    glEnd();
-}
-
-// Windmills
-void Windmill_Stand_Model() {
-    // Base
-    glBegin(GL_POLYGON);
-    glColor3ub(160, 100, 80);
-    glVertex2i(350, 100);
-    glVertex2i(365, 240);
-    glVertex2i(395, 240);
-    glVertex2i(410, 100);
-    glEnd();
-
-    // Wooden Dome
-    glColor3ub(80, 50, 35);
+void house_one() {   // Middle-left House
     glPushMatrix();
-    glTranslatef(380, 240, 0);
-    circle(18);
-    glPopMatrix();
-}
-
-// Single Blade
-void draw_single_blade(float angle_offset) {
-    glPushMatrix();
-    // Rotate specific blade based on the animation spin + its offset
-    glRotatef(spin + angle_offset, 0, 0, 1);
-
-    // Wooden Arm Structure
-    glColor3ub(90, 55, 30);
-    glBegin(GL_POLYGON);
-    glVertex2i(-3, 0);
-    glVertex2i(3, 0);
-    glVertex2i(3, 85);
-    glVertex2i(-3, 85);
-    glEnd();
-    // Canvas Sail Attached to Arm
-    glColor3ub(240, 235, 220);
-    glBegin(GL_POLYGON);
-    glVertex2i(3, 15);
-    glVertex2i(25, 15);
-    glVertex2i(25, 80);
-    glVertex2i(3, 80);
-    glEnd();
-    // Outer Wooden Frame for Sail
-    glColor3ub(100, 60, 35);
-    glBegin(GL_LINE_LOOP);
-    glVertex2i(3, 15);
-    glVertex2i(25, 15);
-    glVertex2i(25, 80);
-    glVertex2i(3, 80);
-    glEnd();
-
-    glPopMatrix();
-}
-
-void Windmill_Blades() {
-    // 4 Blades
-    draw_single_blade(0.0f);   // Blade 1 (Top)
-    draw_single_blade(90.0f);  // Blade 2 (Left)
-    draw_single_blade(180.0f); // Blade 3 (Bottom)
-    draw_single_blade(270.0f); // Blade 4 (Right)
-}
-
-void Windmill() {
-    glPushMatrix();
-    Windmill_Stand_Model();
-    glPopMatrix();
-
-    // Center Peg for Blades
-    glColor3ub(50, 30, 20);
-    glPushMatrix();
-    glTranslatef(380, 245, 0);
-    circle(8);
-    glPopMatrix();
-
-    // Blades Attach at Top
-    glPushMatrix();
-    glTranslatef(380, 245, 0);
-    Windmill_Blades();
-    glPopMatrix();
-}
-
-// Small Trees
-void Tree_Model_One() { // Round dual-bush tree
-    glColor3ub(30, 110, 18);
-    glPushMatrix();
-    glTranslatef(110, 110, 0);
-    circle(15);
-    glPopMatrix();
-    glPushMatrix();
-    glTranslatef(110, 100, 0);
-    circle(15);
-    glPopMatrix();
-    glBegin(GL_POLYGON);
-    glColor3ub(85, 50, 15);
-    glVertex2f(109, 70);
-    glVertex2f(109, 90);
-    glVertex2f(111, 90);
-    glVertex2f(111, 70);
-    glEnd();
-}
-
-void Tree_Model_Two() { // Multi-circle fluffy tree
-    glColor3ub(30, 110, 18);
-    glPushMatrix();
-    glTranslatef(130, 130, 0);
-    circle(5);
-    glPopMatrix();
-    glPushMatrix();
-    glTranslatef(125, 126, 0);
-    circle(5);
-    glPopMatrix();
-    glPushMatrix();
-    glTranslatef(135, 126, 0);
-    circle(5);
-    glPopMatrix();
-    glPushMatrix();
-    glTranslatef(130, 125, 0);
-    circle(5);
-    glPopMatrix();
-    glBegin(GL_POLYGON);
-    glColor3ub(85, 50, 15);
-    glVertex2f(129, 110);
-    glVertex2f(129, 124);
-    glVertex2f(131, 124);
-    glVertex2f(131, 110);
-    glEnd();
-}
-
-void Tree_Model_Three() { // Sharp Pine tree
-    glColor3ub(30, 110, 18);
-    glBegin(GL_POLYGON);
-    glVertex2f(125, 123);
-    glVertex2f(133, 145);
-    glVertex2f(141, 123);
-    glEnd();
-    glBegin(GL_POLYGON);
-    glColor3ub(85, 50, 15);
-    glVertex2f(132, 110);
-    glVertex2f(132, 124);
-    glVertex2f(134, 124);
-    glVertex2f(134, 110);
-    glEnd();
-}
-
-// --- SCENE INSTANCES ---
-
-// Clouds (Using Variables ax, bx, cx, dx to Animate Horizontally)
-void cloud_one() { // Lower middle cloud
-    glPushMatrix();
-    glTranslatef(cx, -40, 0);       
-    cloud_model_one();
-    glPopMatrix();
-}
-void cloud_two() { // High right cloud
-    glPushMatrix();
-    glTranslatef(bx + 100, 150, 0); 
-    cloud_model_one();
-    glPopMatrix();
-}
-void cloud_three() { // Mid-left cloud
-    glPushMatrix();
-    glTranslatef(ax - 80, 80, 0);   
-    cloud_model_Two();
-    glPopMatrix();
-}
-void cloud_four() { // Far right cloud
-    glPushMatrix();
-    glTranslatef(dx + 300, 125, 0); 
-    cloud_model_Two();
-    glPopMatrix();
-}
-void cloud_five() { // High left cloud
-    glPushMatrix();
-    glTranslatef(ax - 300, 170, 0); 
-    cloud_model_Three();
-    glPopMatrix();
-}
-void cloud_six() { // Far left low cloud
-    glPushMatrix();
-    glTranslatef(cx - 500, 20, 0);  
-    cloud_model_Three();
-    glPopMatrix();
-}
-
-// Houses 
-void house_one() { // Ground level, center-left
-    glPushMatrix();
-    glTranslatef(0, 0, 0);          
-    house();
-    glPopMatrix();
-}
-void house_two() {  // Ground level, center-right
-    glPushMatrix();
-    glTranslatef(450, 0, 0);       
-    house();
-    glPopMatrix();
-}
-void house_three() {  // Elevated House on the Hill
-    glPushMatrix();
-    glTranslatef(320, 37, 0);      
-    house();
-    glPopMatrix();
-}
-void house_four() { // Far left ground house
-    glPushMatrix();
-    glTranslatef(-250, 0, 0);       
-    house();
-    glPopMatrix();
-}
-void house_five() { // Far right ground house
-    glPushMatrix();
-    glTranslatef(630, 0, 0);        
+    glTranslatef(0, 0, 0);
     house();
     glPopMatrix();
 }
 
-// Mountains/Hills
-void Hill_Big_One() {  // Main left mountain
+void house_two() {   // Center House
     glPushMatrix();
-    glTranslatef(0, -10, 0);       
-    hill_big();
+    glTranslatef(450, 0, 0);
+    house();
     glPopMatrix();
 }
-void Hill_Big_Two() { // Main right mountain
+
+void house_three() {  // Tilla House
     glPushMatrix();
-    glTranslatef(550, -30, 0);      
-    hill_big();
+    glTranslatef(320, 37, 0);
+    house();
     glPopMatrix();
 }
-void Hill_Small_One() { // Small background mountain peek
+
+void house_four() {   // Far Left House
     glPushMatrix();
-    glTranslatef(-25, 0, 0);        
-    hill_small();
+    glTranslatef(-250, 0, 0);
+    house();
     glPopMatrix();
 }
-void Tilla_One() { // Rolling green hill (Left)
+
+void house_five() {   // Far Right House
     glPushMatrix();
-    glTranslatef(0, 0, 0);          
-    Tilla_One_Model();
+    glTranslatef(630, 0, 0);
+    house();
     glPopMatrix();
 }
-void Tilla_Two() { // Bumpy midground hill (Left)
+
+// Hills
+void Hill_Big_One() {  // Left Large Hill
     glPushMatrix();
-    glTranslatef(0, 0, 0);          
-    Tilla_Two_Model();
+    glTranslatef(0, -10, 0);
+    hill_big_model();
     glPopMatrix();
 }
-void Tilla_Three() { // Bumpy midground hill (Right)
+
+void Hill_Big_Two() {  // Right Large Hill
     glPushMatrix();
-    glTranslatef(400, 0, 0);        
-    Tilla_Two_Model();
+    glTranslatef(550, -30, 0);
+    hill_big_model();
     glPopMatrix();
 }
-void Tilla_Four() { // Rolling green hill (Right)
+
+void Hill_Small_One() { // Left Small Hill
     glPushMatrix();
-    glTranslatef(380, 0, 0);        
+    glTranslatef(-25, 0, 0);
+    hill_small_model();
+    glPopMatrix();
+}
+
+// Tillas
+void Tilla_One() {      // Far Left Tilla
+    glPushMatrix();
+    glTranslatef(0, 0, 0);
     Tilla_One_Model();
     glPopMatrix();
 }
 
-// Small Trees (Background/Midground)
-void Tree_One() { // Round tree near house two
+void Tilla_Two() {      // Center-left Bumpy Tilla
     glPushMatrix();
-    glTranslatef(540, 0, 0);        
-    Tree_Model_One();
+    glTranslatef(0, 0, 0);
+    Tilla_Two_Model();
     glPopMatrix();
 }
-void Tree_Two() { // Round tree on far right
+
+void Tilla_Three() {     // Center-right Tilla
     glPushMatrix();
-    glTranslatef(750, 0, 0);        
-    Tree_Model_One();
-    glPopMatrix();
-}
-void Tree_Three() { // Round tree up on the hill
-    glPushMatrix();
-    glTranslatef(292, 40, 0);      
-    Tree_Model_One();
-    glPopMatrix();
-}
-void Tree_Four() { // Fluffy tree far left
-    glPushMatrix();
-    glTranslatef(30, -20, 0);       
-    Tree_Model_Two();
-    glPopMatrix();
-}
-void Tree_Five() { // Fluffy tree mid-left
-    glPushMatrix();
-    glTranslatef(50, -10, 0);       
-    Tree_Model_Two();
-    glPopMatrix();
-}
-void Tree_Six() {  // Fluffy tree center
-    glPushMatrix();
-    glTranslatef(322, 0, 0);       
-    Tree_Model_Two();
-    glPopMatrix();
-}
-void Tree_Seven() { // Fluffy tree center-right
-    glPushMatrix();
-    glTranslatef(350, -15, 0);      
-    Tree_Model_Two();
-    glPopMatrix();
-}
-void Tree_Eight() { // Pine tree far left
-    glPushMatrix();
-    glTranslatef(90, -2, 0);        
-    Tree_Model_Three();
-    glPopMatrix();
-}
-void Tree_Nine() { // Pine tree mid-left
-    glPushMatrix();
-    glTranslatef(125, 0, 0);        
-    Tree_Model_Three();
-    glPopMatrix();
-}
-void Tree_Ten() { // Pine tree center-right
-    glPushMatrix();
-    glTranslatef(408, -22, 0);      
-    Tree_Model_Three();
+    glTranslatef(380, 0, 0);
+    Tilla_One_Model();
     glPopMatrix();
 }
 
 // Windmills
-void Windmill_One() { // Primary left windmill
+void Windmill_One() {   // Left Windmill
     glPushMatrix();
-    glTranslatef(0, -10, 0);        
-    Windmill();
-    glPopMatrix();
-}
-void Windmill_Two() { // Primary right windmill (placed lower)
-    glPushMatrix();
-    glTranslatef(508, -70, 0);      
-    Windmill();
-    glPopMatrix();
-}
-void Windmill_Three() { // Distant background windmill
-    glPushMatrix();
-    glTranslatef(108, -90, 0);      
+    glTranslatef(0, -10, 0);
     Windmill();
     glPopMatrix();
 }
 
-// --- COMPLEX SCENE ELEMENTS ---
-
-// Village Road
-void draw_village_road() {
-    glColor3ub(180, 135, 85);
-    // Main Horizontal Street
-    glBegin(GL_POLYGON);
-    glVertex2f(0.0f, 52.0f);
-    glVertex2f(1000.0f, 52.0f);
-    glVertex2f(1000.0f, 65.0f);
-    glVertex2f(0.0f, 65.0f);
-    glEnd();
-    glBegin(GL_POLYGON); // Driveway for House 1 (Center Left)
-    glVertex2f(330, 65);
-    glVertex2f(350, 65);
-    glVertex2f(350, 70);
-    glVertex2f(330, 70);
-    glEnd();
-    glBegin(GL_POLYGON); // Driveway for House 2 (Center Right)
-    glVertex2f(780, 65);
-    glVertex2f(800, 65);
-    glVertex2f(800, 70);
-    glVertex2f(780, 70);
-    glEnd();
-    glBegin(GL_POLYGON); // Slanted Path for Hill House 3
-    glVertex2f(555, 65);
-    glVertex2f(585, 65);
-    glVertex2f(605, 107);
-    glVertex2f(580, 107);
-    glEnd();
-    glBegin(GL_POLYGON); // Driveway for House 4 (Far Left)
-    glVertex2f(80, 65);
-    glVertex2f(100, 65);
-    glVertex2f(100, 70);
-    glVertex2f(80, 70);
-    glEnd();
-    glBegin(GL_POLYGON); // Driveway for House 5 (Far Right)
-    glVertex2f(960, 65);
-    glVertex2f(980, 65);
-    glVertex2f(980, 70);
-    glVertex2f(960, 70);
-    glEnd();
-}
-
-// River & Shorelines
-// Sine functions are used to create Smooth, Natural-looking Wavy River Edges
-float river_top_y(float x) {
-    return -35.0f + 10.0f * sin(x * PI / 280.0f) + 6.0f * sin(x * PI / 150.0f + 0.8f);
-}
-float river_bottom_y(float x) {
-    return -210.0f + 20.0f * sin(x * PI / 350.0f) + 12.0f * sin(x * PI / 130.0f + 1.1f);
-}
-
-// Top Green Riverbank (Separates the Road from the Water)
-void field() {
-    glBegin(GL_POLYGON); // Flat Top Green Section
-    glColor3ub(65, 175, 35);
-    glVertex2i(0, 50);
-    glVertex2i(0, 70);
-    glVertex2i(1000, 70);
-    glVertex2i(1000, 50);
-    glEnd();
-    glBegin(GL_POLYGON); // Wavy Bottom Green Section
-    glColor3ub(40, 130, 22);
-    glVertex2f(1000.0f, 50.0f);
-    glVertex2f(0.0f, 50.0f);
-    for (int s = 0; s <= 150; s++) {
-        float x = (float)s / 150.0f * 1000.0f;
-        glVertex2f(x, river_top_y(x));
-    }
-    glEnd();
-}
-
-// Dynamic Blue River Body
-void draw_river() {
-    glBegin(GL_POLYGON);
-    // Wavy Top Edge of the Water (Lighter Blue)
-    for (int s = 0; s <= 150; s++) {
-        float x = (float)s / 150.0f * 1000.0f;
-        glColor3ub(30, 120, 240);
-        glVertex2f(x, river_top_y(x));
-    }
-    // Wavy Bottom Edge of the Water (Darker Blue)
-    for (int s = 150; s >= 0; s--) {
-        float x = (float)s / 150.0f * 1000.0f;
-        glColor3ub(15, 70, 175);
-        glVertex2f(x, river_bottom_y(x));
-    }
-    glEnd();
-}
-
-// One Single Wave Ripple
-void draw_single_ripple(float startX, float baseY, float amplitude) {
-    glBegin(GL_LINE_STRIP);
-    for (int pt = 0; pt <= 30; pt++) {
-        // 't' goes from 0.0 to 1.0 to draw a full sine wave curve
-        float t = (float)pt / 30.0f; 
-        float x = startX + (t * 110.0f);
-        float y = baseY + (amplitude * sin(t * PI * 2.0f));
-        
-        // Only draw it if it's actually visible on the screen (0 to 1000)
-        if (x >= 0 && x <= 1000) {
-            glVertex2f(x, y);
-        }
-    }
-    glEnd();
-}
-
-// Animated Sine Wave Water Ripples
-void draw_waves() { 
-    float waveYLevels[] = {-55.0f, -90.0f, -130.0f, -165.0f, -200.0f}; // 5 rows of waves
-    
-    glColor3ub(70, 150, 240);
-    // Loop through the 5 Vertical Rows
-    for (int w = 0; w < 5; w++) {
-        float baseY = waveYLevels[w];
-        float amplitude = 5.0f + (w % 2) * 2.0f; // Alternates Height between 5.0 and 7.0
-        
-        // Loop Horizontally Across the River to Place Multiple Ripples in a Line
-        for (float x = wave_offset - 120.0f; x < 1050.0f; x += 120.0f) {
-            draw_single_ripple(x, baseY, amplitude);
-        }
-    }
-}
-
-// Foreground Fields & Details
-void draw_large_foreground_tree(float x, float y) {
-    // Brown Wooden Trunk
-    glBegin(GL_POLYGON);
-    glColor3ub(85, 50, 15);
-    glVertex2f(x - 8, y);
-    glVertex2f(x - 8, y - 50);
-    glVertex2f(x + 8, y - 50);
-    glVertex2f(x + 8, y);
-    glEnd();
-    // Green Leaf Clusters (3 Overlapping Circles)
-    glColor3ub(30, 110, 18);
+void Windmill_Two() {   // Right Windmill
     glPushMatrix();
-    glTranslatef(x, y + 20, 0); // Top Center Leaf Blob
-    circle(38);
-    glPopMatrix();
-    glPushMatrix();
-    glTranslatef(x - 25, y - 5, 0); // Bottom Left Leaf Blob
-    circle(32);
-    glPopMatrix();
-    glPushMatrix();
-    glTranslatef(x + 25, y - 5, 0); // Bottom Right Leaf Blob
-    circle(32);
+    glTranslatef(508, -70, 0);
+    Windmill();
     glPopMatrix();
 }
 
-// Bottom Fields & Details
-void draw_bottom_field() {
-    // Base Green Grass (Flat Bottom Part)
-    glBegin(GL_POLYGON);
-    glColor3ub(40, 130, 22);
-    glVertex2f(0.0f, -280.0f);
-    glVertex2f(1000.0f, -280.0f);
-    glVertex2f(1000.0f, -230.0f);
-    glVertex2f(0.0f, -230.0f);
-    glEnd();
-
-    // Base Green Grass (Wavy Top Part Touching the River)
-    glBegin(GL_POLYGON);
-    glColor3ub(65, 175, 35);
-    for (int s = 0; s <= 150; s++) {
-        float x = (float)s / 150.0f * 1000.0f;
-        glVertex2f(x, river_bottom_y(x));
-    }
-    glVertex2f(1000.0f, -280.0f);
-    glVertex2f(0.0f, -280.0f);
-    glEnd();
-
-    // Angled Dirt Path to the Water
-    glColor3ub(180, 135, 85);
-    glBegin(GL_POLYGON);
-    glVertex2f(250, -280); // Bottom Left
-    glVertex2f(340, -280); // Bottom Right
-    glVertex2f(310, -220); // Top Right
-    glVertex2f(270, -220); // Top Left
-    glEnd();
-
-    // Wooden Fence
-    glColor3ub(120, 70, 40);
-    // Two Horizontal Rails
-    glBegin(GL_QUADS); 
-    glVertex2f(400, -250); // Top Rail
-    glVertex2f(950, -250);
-    glVertex2f(950, -246);
-    glVertex2f(400, -246); 
-    glVertex2f(400, -265); // Bottom Rail
-    glVertex2f(950, -265);
-    glVertex2f(950, -261);
-    glVertex2f(400, -261); 
-    glEnd();
-    // Vertical Fence Posts
-    glBegin(GL_QUADS); 
-    for (int i = 400; i <= 950; i += 50) {
-        glVertex2f(i, -275);
-        glVertex2f(i + 8, -275);
-        glVertex2f(i + 8, -240);
-        glVertex2f(i, -240);
-    }
-    glEnd();
-
-    // Left Bush (Next to the Dirt Path)
-    glColor3ub(30, 110, 18);
+void Windmill_Three() { // Center Windmill
     glPushMatrix();
-    glTranslatef(75, -242, 0); // Top Bush
-    circle(21);
-    glPopMatrix(); 
-    glPushMatrix();
-    glTranslatef(95, -255, 0); // Right Bush
-    circle(17);
-    glPopMatrix();
-    glPushMatrix();
-    glTranslatef(57, -256, 0); // Left Bush
-    circle(16);
-    glPopMatrix();       
-    glBegin(GL_POLYGON); // Small Trunk
-    glColor3ub(85, 50, 15);
-    glVertex2f(71, -260);
-    glVertex2f(71, -280);
-    glVertex2f(77, -280);
-    glVertex2f(77, -260);
-    glEnd();
-
-    // Middle Right Bush
-    glColor3ub(35, 120, 20);
-    glPushMatrix();
-    glTranslatef(510, -241, 0); // Top Bush
-    circle(20);
-    glPopMatrix(); 
-    glPushMatrix();
-    glTranslatef(530, -253, 0); // Right Bush
-    circle(16);
-    glPopMatrix(); 
-    glPushMatrix();
-    glTranslatef(490, -253, 0); // Left Bush
-    circle(16);
-    glPopMatrix();       
-    glBegin(GL_POLYGON); // Small Trunk
-    glColor3ub(85, 50, 15);
-    glVertex2f(507, -257);
-    glVertex2f(507, -280);
-    glVertex2f(512, -280);
-    glVertex2f(512, -257);
-    glEnd();
-
-    // Large Overlapping Foreground Trees
-    draw_large_foreground_tree(55, -173);  // Left Edge
-    draw_large_foreground_tree(180, -215); // Mid-Left
-    draw_large_foreground_tree(400, -230); // Center
-    draw_large_foreground_tree(570, -190); // Mid-Right (Higher)
-    draw_large_foreground_tree(685, -225); // Mid-Right (Lower)
-    draw_large_foreground_tree(790, -185); // Right (Higher)
-    draw_large_foreground_tree(930, -230); // Far Right Edge
-}
-
-// --- VEHICLES --- 
-
-// Plane
-void draw_plane() {
-    float baseY = 365.0f;
-    glPushMatrix();
-    glTranslatef(position6, baseY, 0.0f); // Animates Across the Sky
-    glScalef(1.2f, 1.2f, 1.0f);
-
-    // Back Wing
-    glBegin(GL_POLYGON); 
-    glColor3ub(180, 30, 30);
-    glVertex2f(10, 5);
-    glVertex2f(30, 5);
-    glVertex2f(45, 20);
-    glVertex2f(25, 20);
-    glEnd(); 
-    // Main Fuselage (Body)
-    glBegin(GL_POLYGON);
-    glColor3ub(245, 245, 250);
-    glVertex2f(-50, 0);
-    glVertex2f(40, -10);
-    glVertex2f(60, -5);
-    glVertex2f(65, 5);
-    glVertex2f(50, 15);
-    glVertex2f(-40, 15);
-    glVertex2f(-60, 10);
-    glEnd(); 
-    // Cockpit Window
-    glBegin(GL_POLYGON); 
-    glColor3ub(100, 200, 255);
-    glVertex2f(20, 15);
-    glVertex2f(45, 15);
-    glVertex2f(55, 5);
-    glVertex2f(25, 5);
-    glEnd(); 
-    // Red Detail Stripe
-    glBegin(GL_POLYGON); 
-    glColor3ub(220, 40, 40);
-    glVertex2f(-55, 5);
-    glVertex2f(40, -2);
-    glVertex2f(40, 2);
-    glVertex2f(-55, 8);
-    glEnd(); 
-    // Tail Fin
-    glBegin(GL_POLYGON); 
-    glColor3ub(220, 40, 40);
-    glVertex2f(-45, 12);
-    glVertex2f(-35, 35);
-    glVertex2f(-55, 35);
-    glVertex2f(-60, 12);
-    glEnd(); 
-    // Front Wing
-    glBegin(GL_POLYGON); 
-    glColor3ub(220, 40, 40);
-    glVertex2f(-10, -5);
-    glVertex2f(25, -5);
-    glVertex2f(15, -25);
-    glVertex2f(-20, -25);
-    glEnd(); 
-    // Nose Cone (Propeller Hub)
-    glBegin(GL_POLYGON); 
-    glColor3ub(50, 50, 50);
-    glVertex2f(65, 0);
-    glVertex2f(72, 2);
-    glVertex2f(72, 8);
-    glVertex2f(65, 10);
-    glEnd(); 
-    // Spinning Propeller Blur
-    glBegin(GL_POLYGON); 
-    glColor3ub(180, 180, 180);
-    glVertex2f(70, -18);
-    glVertex2f(74, -18);
-    glVertex2f(74, 28);
-    glVertex2f(70, 28);
-    glEnd(); 
-
+    glTranslatef(108, -90, 0);
+    Windmill();
     glPopMatrix();
 }
 
-// Motor Boat
-void draw_motorboat(float cx, float cy) {
-    // Main Hull (Base of the Boat)
-    glBegin(GL_POLYGON);
-    glColor3ub(230, 230, 235);
-    glVertex2f(cx - 100, cy);
-    glVertex2f(cx - 110, cy - 30);
-    glVertex2f(cx + 85, cy - 30);
-    glVertex2f(cx + 110, cy);
-    glEnd();
-    // Blue Bottom Stripe (Touching the Water)
-    glBegin(GL_POLYGON);
-    glColor3ub(50, 100, 210);
-    glVertex2f(cx - 100, cy);
-    glVertex2f(cx - 100, cy - 8);
-    glVertex2f(cx + 110, cy - 8);
-    glVertex2f(cx + 110, cy);
-    glEnd();
-    // Upper Cabin (Roof Section)
-    glBegin(GL_POLYGON);
-    glColor3ub(235, 235, 240);
-    glVertex2f(cx - 45, cy);
-    glVertex2f(cx - 45, cy + 40);
-    glVertex2f(cx + 45, cy + 40);
-    glVertex2f(cx + 65, cy);
-    glEnd();
-    // Left Window
-    glBegin(GL_POLYGON);
-    glColor3ub(110, 185, 230);
-    glVertex2f(cx - 32, cy + 10);
-    glVertex2f(cx - 32, cy + 30);
-    glVertex2f(cx - 8, cy + 30);
-    glVertex2f(cx - 8, cy + 10);
-    glEnd();
-    // Right Window
-    glBegin(GL_POLYGON);
-    glColor3ub(110, 185, 230);
-    glVertex2f(cx + 5, cy + 10);
-    glVertex2f(cx + 5, cy + 30);
-    glVertex2f(cx + 28, cy + 30);
-    glVertex2f(cx + 28, cy + 10);
-    glEnd();
+// Small Trees (Upper-side)
+void Tree_One() {       // Round Tree
+    glPushMatrix();
+    glTranslatef(135, 75, 0);
+    Tree_Model_One();
+    glPopMatrix();
 }
 
-// Sailboat
-void draw_sailboat(float cx, float cy) {
-    // Main Wooden Hull
-    glBegin(GL_POLYGON);
-    glColor3ub(120, 72, 30);
-    glVertex2f(cx - 90, cy);
-    glVertex2f(cx - 100, cy - 35);
-    glVertex2f(cx + 75, cy - 35);
-    glVertex2f(cx + 95, cy);
-    glEnd();
-    // Red Top Rim
-    glBegin(GL_POLYGON);
-    glColor3ub(200, 50, 50);
-    glVertex2f(cx - 90, cy);
-    glVertex2f(cx - 90, cy - 10);
-    glVertex2f(cx + 95, cy - 10);
-    glVertex2f(cx + 95, cy);
-    glEnd();
-    // Wooden Mast (Center Pole)
-    glLineWidth(3.0f);
-    glBegin(GL_LINES);
-    glColor3ub(90, 55, 18);
-    glVertex2f(cx + 5, cy + 5);
-    glVertex2f(cx + 5, cy + 145);
-    glEnd();
-    glLineWidth(1.0f); 
-    // Large Yellow Main Sail (Back sail)
-    glBegin(GL_POLYGON);
-    glColor3ub(245, 210, 70);
-    glVertex2f(cx + 5, cy + 8);
-    glVertex2f(cx + 5, cy + 140);
-    glVertex2f(cx - 75, cy + 14);
-    glEnd(); 
-    // Small Orange Front Sail (Jib)
-    glBegin(GL_POLYGON);
-    glColor3ub(230, 130, 50);
-    glVertex2f(cx + 5, cy + 110);
-    glVertex2f(cx + 5, cy + 8);
-    glVertex2f(cx + 70, cy + 18);
-    glEnd(); 
+void Tree_Two() {       // Pine Tree
+    glPushMatrix();
+    glTranslatef(165, 92, 0);
+    Tree_Model_Three();
+    glPopMatrix();
+}
+
+void Tree_Three() {     // Pine Tree
+    glPushMatrix();
+    glTranslatef(190, 105, 0);
+    Tree_Model_Three();
+    glPopMatrix();
+}
+
+void Tree_Four() {      // Round Tree
+    glPushMatrix();
+    glTranslatef(395, 67, 0);
+    Tree_Model_One();
+    glPopMatrix();
+}
+
+void Tree_Five() {      // Fluffy Tree
+    glPushMatrix();
+    glTranslatef(440, 108, 0);
+    Tree_Model_Two();
+    glPopMatrix();
+}
+
+void Tree_Six() {       // Fluffy Tree
+    glPushMatrix();
+    glTranslatef(470, 82, 0);
+    Tree_Model_Two();
+    glPopMatrix();
+}
+
+void Tree_Seven() {     // Round Tree
+    glPushMatrix();
+    glTranslatef(610, 70, 0);
+    Tree_Model_One();
+    glPopMatrix();
+}
+
+void Tree_Eight() {     // Fluffy Tree
+    glPushMatrix();
+    glTranslatef(690, 70, 0);
+    Tree_Model_Two();
+    glPopMatrix();
+}
+
+void Tree_Nine() {      // Round Tree
+    glPushMatrix();
+    glTranslatef(880, 70, 0);
+    Tree_Model_One();
+    glPopMatrix();
+}
+
+// Large Trees (Lower-side)
+void Fore_Tree_One() {  // Far Left
+    glPushMatrix();
+    glTranslatef(55, -230, 0);
+    Tree_Model_Four();
+    glPopMatrix();
+}
+
+void Fore_Tree_Two() {  // Mid Left
+    glPushMatrix();
+    glTranslatef(208, -260, 0);
+    Tree_Model_Four();
+    glPopMatrix();
+}
+
+void Fore_Tree_Three() { // Center
+    glPushMatrix();
+    glTranslatef(380, -270, 0);
+    Tree_Model_Four();
+    glPopMatrix();
+}
+
+void Fore_Tree_Four() { // Mid Right
+    glPushMatrix();
+    glTranslatef(570, -240, 0);
+    Tree_Model_Four();
+    glPopMatrix();
+}
+
+void Fore_Tree_Five() { // Right
+    glPushMatrix();
+    glTranslatef(685, -270, 0);
+    Tree_Model_Four();
+    glPopMatrix();
+}
+
+void Fore_Tree_Six() {  // Far Right
+    glPushMatrix();
+    glTranslatef(820, -237, 0);
+    Tree_Model_Four();
+    glPopMatrix();
+}
+
+void Fore_Tree_Seven() { // Edge Right
+    glPushMatrix();
+    glTranslatef(930, -270, 0);
+    Tree_Model_Four();
+    glPopMatrix();
+}
+
+void Bush_One() {        // Left
+    glPushMatrix();
+    glTranslatef(120, -275, 0);
+    Tree_Model_Five();
+    glPopMatrix();
+}
+
+void Bush_Two() {        // Lower-middle
+    glPushMatrix();
+    glTranslatef(490, -285, 0);
+    Tree_Model_Five();
+    glPopMatrix();
+}
+
+void Bush_Three() {      // Upper-middle
+    glPushMatrix();
+    glTranslatef(470, -220, 0);
+    Tree_Model_Five();
+    glPopMatrix();
+}
+
+void Bush_Four() {       // Right
+    glPushMatrix();
+    glTranslatef(777, -287, 0);
+    Tree_Model_Five();
+    glPopMatrix();
 }
 
 // --- MAIN DISPLAY FUNCTION ---
@@ -1173,34 +968,28 @@ void draw_sailboat(float cx, float cy) {
 void display(void) {
     glClear(GL_COLOR_BUFFER_BIT);
 
-    // Deep Background
-    draw_sky_gradient();
+    draw_sky();
     Sun();
-
-    // Distant Background Elements
     Windmill_Three();
     Hill_Big_One();
-    Tilla_Four();
+    Tilla_Two();
+    Tilla_Three();
     house_three();
     Hill_Big_Two();
     Hill_Small_One();
-    cloud_three();
-    cloud_four();
+    cloud_one();
+    cloud_two();
     Windmill_One();
     Windmill_Two();
-
-    // Midground Village
+    field();
+    village_road();
     Tilla_One();
-    Tilla_Two();
-    Tilla_Three();
     house_one();
     house_two();
     house_four();
     house_five();
-    cloud_one();
-    cloud_two();
-    cloud_five();
-    cloud_six();
+    draw_plane();
+
     Tree_One();
     Tree_Two();
     Tree_Three();
@@ -1210,103 +999,65 @@ void display(void) {
     Tree_Seven();
     Tree_Eight();
     Tree_Nine();
-    Tree_Ten();
 
-    // Ground Layer
-    field();
-    draw_village_road();
     draw_river();
-    draw_waves();
+    draw_sailboat();
 
-    // Vehicles on River
-    glPushMatrix();
-    glTranslatef(motorboat_x, -60.0f, 0.0f);
-    glScalef(-1.0f, 1.0f, 1.0f);
-    draw_motorboat(0.0f, 0.0f);
-    glPopMatrix();
-    glPushMatrix();
-    glTranslatef(sailboat_x, -60.0f, 0.0f);
-    glScalef(-1.0f, 1.0f, 1.0f);
-    draw_sailboat(0.0f, 0.0f);
-    glPopMatrix();
-
-    // Foreground
     draw_bottom_field();
-    draw_plane();
+    Fore_Tree_One();
+    Fore_Tree_Two();
+    Fore_Tree_Three();
+    Fore_Tree_Four();
+    Fore_Tree_Five();
+    Fore_Tree_Six();
+    Fore_Tree_Seven();
+    Bush_One();
+    Bush_Two();
+    Bush_Three();
+    Bush_Four();
 
     glFlush();
 }
 
 // --- ANIMATION ---
 
-void move_right() {
-    // Rotate Windmills
-    spin += 0.3f * anim_speed; // Rotate Windmills
+void move_func() {
+    // Windmills Rotation
+    spin -= 0.15f;
 
-    // Move Clouds
-    ax += 0.05f * anim_speed;
+    // Clouds Animation (Left-Right)
+    ax += 0.10f;        // Lower Cloud
     if (ax > 1000)
         ax = -600;
-    bx += 0.08f * anim_speed;
+    bx += 0.12f;        // Upper Cloud
     if (bx > 1000)
-        bx = -400;
-    cx += 0.10f * anim_speed;
-    if (cx > 1000)
-        cx = -300;
-    dx += 0.15f * anim_speed;
-    if (dx > 1000)
-        dx = -500;
+        bx = -800;
 
-    // Move Airplane
-    position6 += 0.9f * anim_speed;
-    if (position6 > 1250.0f)
-        position6 = -250.0f;
+    // Plane Animation (Right-Left)
+    plane_x -= 0.25f;
+    if (plane_x < -250.0f) {
+        plane_x = 1250.0f;
+    }
 
-    // Move Boats (Right to Left)
-    motorboat_x -= 0.35f * anim_speed;
-    if (motorboat_x < -220.0f)
-        motorboat_x = 1200.0f;
-    sailboat_x -= 0.2f * anim_speed;
-    if (sailboat_x < -250.0f)
-        sailboat_x = 1200.0f;
+    // Boat Animation (Left-Right)
+    sailboat_x += 0.20f;
+    if (sailboat_x > 1250.0f) {
+        sailboat_x = -250.0f;
+    }
 
-    // Scroll River Waves
-    wave_offset += 0.6f * anim_speed;
-    if (wave_offset > 120.0f)
-        wave_offset -= 120.0f;
-
-    glutPostRedisplay(); // Refresh Screen
+    glutPostRedisplay();  // Calls display() again
 }
 
 // --- INPUT / CONTROLS ---
 
 void keyboard(unsigned char key, int x, int y) {
-    if (key == ' ') {
-        // Spacebar = Toggle Play/Pause
-        isPlaying = !isPlaying;
+    if (key == ' ') {           // Spacebar
+        isPlaying = !isPlaying; // Switch the State
+
         if (isPlaying)
-            glutIdleFunc(move_right);
+            glutIdleFunc(move_func);
         else
             glutIdleFunc(NULL);
-    }
-    else if (key == '+' || key == '=') {
-        // '+' = Increase Speed
-        anim_speed += 0.3f;
-    }
-    else if (key == '-' || key == '_') {
-        // '-' = Decrease Speed
-        anim_speed -= 0.3f;
-        if (anim_speed < 0.0f)
-            anim_speed = 0.0f;
-    }
-    else if (key == 't' || key == 'T' || key == 'd' || key == 'D') {
-        // 'T'/'D' = Toggle Day to Night immediately
-        isDay = !isDay;
-        if (isDay)
-            day_angle = PI / 2.0f; // Snap to Day
-        else
-            day_angle = 3.0f * PI / 2.0f; // Snap to Night
-        glutPostRedisplay();
     }
 }
 
