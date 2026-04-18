@@ -1,5 +1,3 @@
-// 5. Wooden Fence Posts
-
 #include <windows.h>
 #include <GL\glut.h>
 #include <GL/glu.h>
@@ -546,14 +544,14 @@ void draw_sailboat() {
     glVertex2i(5, 145);      // Top
     glEnd();
     glLineWidth(1.0f);
-    // Main Sail
+    // Yellow Sail
     glBegin(GL_TRIANGLES);
     glColor3ub(245, 210, 70);// yellow
     glVertex2i(5, 8);        // Bottom-right
     glVertex2i(5, 140);      // Top
     glVertex2i(-75, 14);     // Far-left
     glEnd();
-    // Front Sail
+    // Orange Sail
     glBegin(GL_TRIANGLES);
     glColor3ub(230, 130, 50);// orange
     glVertex2i(5, 110);      // Top point
@@ -570,14 +568,6 @@ void draw_plane() {
     glTranslatef(plane_x, baseY, 0.0f);
     glScalef(-1.0f, 1.0f, 1.0f); // Flips the Plane Horizontally
 
-    // Tail Fin
-    glBegin(GL_POLYGON);
-    glColor3ub(220, 40, 40); // red
-    glVertex2i(-45, 15);     // Bottom-right
-    glVertex2i(-35, 35);     // Top-right
-    glVertex2i(-50, 35);     // Top-left
-    glVertex2i(-55, 15);     // Bottom-left
-    glEnd();
     // Main Body
     glBegin(GL_POLYGON);
     glColor3ub(245, 245, 250); // white
@@ -602,6 +592,14 @@ void draw_plane() {
     glVertex2i(25, 3);       // Top-right
     glVertex2i(5, -25);      // Bottom-right
     glVertex2i(-20, -25);    // Bottom-left
+    glEnd();
+    // Tail Fin
+    glBegin(GL_POLYGON);
+    glColor3ub(220, 40, 40); // red
+    glVertex2i(-45, 15);     // Bottom-right
+    glVertex2i(-35, 35);     // Top-right
+    glVertex2i(-50, 35);     // Top-left
+    glVertex2i(-55, 15);     // Bottom-left
     glEnd();
 
     glPopMatrix();
@@ -719,42 +717,6 @@ void cloud_two() {   // Lower Cloud
     glPopMatrix();
 }
 
-// Houses
-void house_one() {   // Middle-left House
-    glPushMatrix();
-    glTranslatef(0, 0, 0);
-    house();
-    glPopMatrix();
-}
-
-void house_two() {   // Center House
-    glPushMatrix();
-    glTranslatef(450, 0, 0);
-    house();
-    glPopMatrix();
-}
-
-void house_three() {  // Tilla House
-    glPushMatrix();
-    glTranslatef(320, 37, 0);
-    house();
-    glPopMatrix();
-}
-
-void house_four() {   // Far Left House
-    glPushMatrix();
-    glTranslatef(-250, 0, 0);
-    house();
-    glPopMatrix();
-}
-
-void house_five() {   // Far Right House
-    glPushMatrix();
-    glTranslatef(630, 0, 0);
-    house();
-    glPopMatrix();
-}
-
 // Hills
 void Hill_Big_One() {  // Left Large Hill
     glPushMatrix();
@@ -796,6 +758,42 @@ void Tilla_Three() {     // Center-right Tilla
     glPushMatrix();
     glTranslatef(380, 0, 0);
     Tilla_One_Model();
+    glPopMatrix();
+}
+
+// Houses
+void house_one() {   // Middle-left House
+    glPushMatrix();
+    glTranslatef(0, 0, 0);
+    house();
+    glPopMatrix();
+}
+
+void house_two() {   // Center House
+    glPushMatrix();
+    glTranslatef(450, 0, 0);
+    house();
+    glPopMatrix();
+}
+
+void house_three() {  // Tilla House
+    glPushMatrix();
+    glTranslatef(320, 37, 0);
+    house();
+    glPopMatrix();
+}
+
+void house_four() {   // Far Left House
+    glPushMatrix();
+    glTranslatef(-250, 0, 0);
+    house();
+    glPopMatrix();
+}
+
+void house_five() {   // Far Right House
+    glPushMatrix();
+    glTranslatef(630, 0, 0);
+    house();
     glPopMatrix();
 }
 
