@@ -13,10 +13,11 @@ GLint i;
 bool isPlaying = false;
 
 // Animation Offsets
-GLfloat ax = 0, bx = 0;      // Clouds X-axis Movement
-GLfloat spin = 0.0;          // Windmill Blades Rotation Angle
-GLfloat plane_x = 850.0f;    // Airplane X-axis position
-GLfloat sailboat_x = 250.0f; // Sailboat X-axis position
+GLfloat ax = 0, bx = 0;        // Clouds X-axis Movement
+GLfloat spin = 0.0;            // Windmill Blades Rotation Angle
+GLfloat plane_x = 850.0f;      // Airplane X-axis position
+GLfloat sailboat_x = 250.0f;   // Sailboat X-axis position
+GLfloat sailboat2_x = 850.0f;  // Sailboat-2 X-axis position
 
 // --- INITIALIZATION ---
 
@@ -544,19 +545,67 @@ void draw_sailboat() {
     glVertex2i(5, 145);      // Top
     glEnd();
     glLineWidth(1.0f);
-    // Yellow Sail
+    // Main Sail
     glBegin(GL_TRIANGLES);
     glColor3ub(245, 210, 70);// yellow
     glVertex2i(5, 8);        // Bottom-right
     glVertex2i(5, 140);      // Top
     glVertex2i(-75, 14);     // Far-left
     glEnd();
-    // Orange Sail
+    // Front Sail
     glBegin(GL_TRIANGLES);
     glColor3ub(230, 130, 50);// orange
     glVertex2i(5, 110);      // Top point
     glVertex2i(5, 8);        // Bottom-left
     glVertex2i(70, 18);      // Far-right
+    glEnd();
+
+    glPopMatrix();
+}
+
+void draw_sailboat_two() {
+    float baseY = -140.0f;       // Boat's Vertical Position
+    glPushMatrix();
+    glTranslatef(sailboat2_x, baseY, 0.0f);
+    glScalef(-1.0f, 1.0f, 1.0f); // Flips the Boat Horizontally
+
+    // Boat Hull
+    glBegin(GL_POLYGON);
+    glColor3ub(120, 72, 30);    // brown
+    glVertex2i(-95, 0);      
+    glVertex2i(-75, -35);    
+    glVertex2i(75, -35);     
+    glVertex2i(95, 0);       
+    glEnd();
+    // Top Rim
+    glBegin(GL_POLYGON);
+    glColor3ub(200, 50, 50);    // red
+    glVertex2i(-95, 0);      
+    glVertex2i(-95, -10);    
+    glVertex2i(95, -10);     
+    glVertex2i(95, 0);       
+    glEnd();
+    // Center Pole
+    glLineWidth(3.0f);
+    glBegin(GL_LINES);
+    glColor3ub(90, 55, 18);     // dark-brown
+    glVertex2i(5, 5);        
+    glVertex2i(5, 145);      
+    glEnd();
+    glLineWidth(1.0f);
+    // Main Sail 
+    glBegin(GL_TRIANGLES);
+    glColor3ub(173, 130, 89);   // earthy-brown
+    glVertex2i(5, 8);        
+    glVertex2i(5, 140);      
+    glVertex2i(-75, 14);     
+    glEnd();
+    // Front Sail 
+    glBegin(GL_TRIANGLES);
+    glColor3ub(120, 90, 60);    // dark-brown
+    glVertex2i(5, 110);      
+    glVertex2i(5, 8);        
+    glVertex2i(70, 18);      
     glEnd();
 
     glPopMatrix();
@@ -1000,6 +1049,7 @@ void display(void) {
 
     draw_river();
     draw_sailboat();
+    draw_sailboat_two();
 
     draw_bottom_field();
     Fore_Tree_One();
@@ -1041,6 +1091,12 @@ void move_func() {
     sailboat_x += 0.20f;
     if (sailboat_x > 1250.0f) {
         sailboat_x = -250.0f;
+    }
+
+    // Boat 2 Animation (Right-Left)
+    sailboat2_x -= 0.18f; 
+    if (sailboat2_x < -250.0f) {
+        sailboat2_x = 1250.0f;
     }
 
     glutPostRedisplay();  // Calls display() again
