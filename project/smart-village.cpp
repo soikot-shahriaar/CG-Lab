@@ -7,8 +7,6 @@
 
 // --- GLOBAL VARIABLES ---
 
-GLint i;
-
 // State Variables
 bool isPlaying = false;
 
@@ -35,36 +33,32 @@ void circle(GLdouble rad) {
     int y = r;
     int p = 1 - r;
 
-    glBegin(GL_QUADS);
-    while (x <= y) { // Loops until X and Y cross (calculates 1/8th of the circle)
+    glBegin(GL_POLYGON);
+    while (x <= y) {
         // Draws a horizontal strip across the TOP of the circle
-        glVertex2i(-x, y);      // Top strip - Left outer point
-        glVertex2i(x, y);       // Top strip - Right outer point
-        glVertex2i(x, y - 1);   // Top strip - Right inner point (1 pixel thick)
-        glVertex2i(-x, y - 1);  // Top strip - Left inner point (1 pixel thick)
+        glVertex2i(-x, y);
+        glVertex2i(x, y);
+
         // Draws a horizontal strip across the BOTTOM of the circle
-        glVertex2i(-x, -y);     // Bottom strip - Left outer point
-        glVertex2i(x, -y);      // Bottom strip - Right outer point
-        glVertex2i(x, -y + 1);  // Bottom strip - Right inner point
-        glVertex2i(-x, -y + 1); // Bottom strip - Left inner point
+        glVertex2i(-x, -y);
+        glVertex2i(x, -y);
+
         // Draws a vertical strip across the UPPER SIDES of the circle
-        glVertex2i(-y, x);      // Upper sides - Left outer point
-        glVertex2i(y, x);       // Upper sides - Right outer point
-        glVertex2i(y, x - 1);   // Upper sides - Right inner point
-        glVertex2i(-y, x - 1);  // Upper sides - Left inner point
+        glVertex2i(-y, x);
+        glVertex2i(y, x);
+
         // Draws a vertical strip across the LOWER SIDES of the circle
-        glVertex2i(-y, -x);     // Lower sides - Left outer point
-        glVertex2i(y, -x);      // Lower sides - Right outer point
-        glVertex2i(y, -x + 1);  // Lower sides - Right inner point
-        glVertex2i(-y, -x + 1); // Lower sides - Left inner point
+        glVertex2i(-y, -x);
+        glVertex2i(y, -x);
+
 
         x++;                   // Always steps right in the X axis
-        if (p < 0) {           // If the midpoint is INSIDE the circle border
-            p = p + 2 * x + 1; // Update parameter (Y stays the same, move purely right)
+        if (p < 0) {
+            p = p + 2 * x + 1;
         }
-        else {                         // If the midpoint is OUTSIDE the circle border
-            y--;                       // Step down in the Y axis (curve downwards)
-            p = p + 2 * x - 2 * y + 1; // Update parameter for diagonal move
+        else {
+            y--;
+            p = p + 2 * x - 2 * y + 1;
         }
     }
     glEnd();
@@ -572,40 +566,40 @@ void draw_sailboat_two() {
     // Boat Hull
     glBegin(GL_POLYGON);
     glColor3ub(120, 72, 30);    // brown
-    glVertex2i(-95, 0);      
-    glVertex2i(-75, -35);    
-    glVertex2i(75, -35);     
-    glVertex2i(95, 0);       
+    glVertex2i(-95, 0);
+    glVertex2i(-75, -35);
+    glVertex2i(75, -35);
+    glVertex2i(95, 0);
     glEnd();
     // Top Rim
     glBegin(GL_POLYGON);
     glColor3ub(200, 50, 50);    // red
-    glVertex2i(-95, 0);      
-    glVertex2i(-95, -10);    
-    glVertex2i(95, -10);     
-    glVertex2i(95, 0);       
+    glVertex2i(-95, 0);
+    glVertex2i(-95, -10);
+    glVertex2i(95, -10);
+    glVertex2i(95, 0);
     glEnd();
     // Center Pole
     glLineWidth(3.0f);
     glBegin(GL_LINES);
     glColor3ub(90, 55, 18);     // dark-brown
-    glVertex2i(5, 5);        
-    glVertex2i(5, 145);      
+    glVertex2i(5, 5);
+    glVertex2i(5, 145);
     glEnd();
     glLineWidth(1.0f);
-    // Main Sail 
+    // Main Sail
     glBegin(GL_TRIANGLES);
     glColor3ub(173, 130, 89);   // earthy-brown
-    glVertex2i(5, 8);        
-    glVertex2i(5, 140);      
-    glVertex2i(-75, 14);     
+    glVertex2i(5, 8);
+    glVertex2i(5, 140);
+    glVertex2i(-75, 14);
     glEnd();
-    // Front Sail 
+    // Front Sail
     glBegin(GL_TRIANGLES);
     glColor3ub(120, 90, 60);    // dark-brown
-    glVertex2i(5, 110);      
-    glVertex2i(5, 8);        
-    glVertex2i(70, 18);      
+    glVertex2i(5, 110);
+    glVertex2i(5, 8);
+    glVertex2i(70, 18);
     glEnd();
 
     glPopMatrix();
@@ -1094,7 +1088,7 @@ void move_func() {
     }
 
     // Boat 2 Animation (Right-Left)
-    sailboat2_x -= 0.18f; 
+    sailboat2_x -= 0.18f;
     if (sailboat2_x < -250.0f) {
         sailboat2_x = 1250.0f;
     }
